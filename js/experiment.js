@@ -71,8 +71,8 @@ console.log('Participant:', participant_id,
             'Latin group:', LATIN_GROUP,
             'Condition order:', COND_ORDER);
 
-// Replace with deployed Google Apps Script Web App URL when ready.
-const GOOGLE_SCRIPT_URL = '';
+// Deployed Google Apps Script Web App endpoint.
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNhdCrXs7LFRdPxdWXfKW8FM099ORw21wEiy8WnhU__14q2OuFgZNrF3q-bxIUgMQ9/exec';
 
 const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const LOCAL_SAVE_URL = IS_LOCAL ? '/save-data' : '';
