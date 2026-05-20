@@ -125,7 +125,7 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
 
   const sub = [];
 
-  // ---- Fixation ----
+  // ---- Fixation (trial 시작 1회만 — 단어 사이에는 fixation 없음) ----
   sub.push({
     type: jsPsychHtmlKeyboardResponse,
     choices: 'NO_KEYS',
@@ -247,6 +247,9 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
       }, 1000);
     },
     on_finish: function(d) {
+      // jsPsych 의 d.rt 는 '회상 화면이 뜬 순간 → 제출 버튼/시간초과'까지의 ms.
+      // 두 블록(math/nomath) 모두 동일 SurveyText 컴포넌트를 쓰므로 RT 가 동일하게 잡힌다.
+      d.recall_rt = d.rt;
       const txt = (d.response && d.response.recall) || '';
       d.recall_text = txt;
       const tokens = txt.trim().split(/\s+/).filter(s => s.length > 0);
@@ -327,17 +330,32 @@ function buildBlock(blockTag, blockIdx) {
     stimulus: `
       <div class="screen-card">
         <h2>연습</h2>
-        <p>먼저 본 실험과 동일한 방식의 <b>연습 시행 1회</b>를 진행합니다.</p>
+        <p>먼저 본 실험과 동일한 방식의 <b>연습 시행 2회</b>를 진행합니다.</p>
         <p>시행이 끝나면 단어 회상 화면이 나타납니다. 8개 단어를
            <b>제시 순서대로</b> 띄어쓰기로 구분해 입력하세요. 기억나지 않는
            위치는 <b><code>##</code></b> 으로 표기합니다.</p>
+        ${isMath ? `
+        <p>수식 화면에서는 <b>J = 참 / F = 거짓</b> 키로 빠르게 응답해 주세요.
+           응답 여부와 관계없이 1.5초 후 다음 단어로 넘어갑니다.</p>` : ''}
         <p>준비되면 '연습 시작'을 눌러 주세요.</p>
       </div>`,
     choices: ['연습 시작']
   });
 
-  // --- Practice trial (1, dissimilar) --------------------------------------
+  // --- Practice trials (2 — 무관 + 묶음) -----------------------------------
+  // 연습 1: dissimilar — 가장 표준적인 8 단어 회상 흐름.
+  // 연습 2: grouped — 같은 의미 범주 4 + 4 가 들어오는 구조를 미리 한 번 경험.
   tl.push(...buildTrial(blockTag, 0, 'dissimilar', true));
+  tl.push({
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div class="screen-card centered">
+        <h3>연습 1 완료</h3>
+        <p>한 번 더 연습합니다. 준비되면 '다음 연습'을 눌러 주세요.</p>
+      </div>`,
+    choices: ['다음 연습']
+  });
+  tl.push(...buildTrial(blockTag, 0, 'grouped', true));
 
   // --- Main intro -----------------------------------------------------------
   tl.push({
