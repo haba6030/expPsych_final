@@ -123,6 +123,12 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
   // Capture math responses across the 8 filler steps of this trial.
   const mathResponses = [];
 
+  // Recall countdown handle — must be cleared in on_finish to prevent leak
+  // into subsequent recall trials. (Bug fix: setInterval previously only
+  // cleared itself on timeout, so early submits left it running and a
+  // later trial's form could get force-submitted.)
+  let recallTimerHandle = null;
+
   const sub = [];
 
   // ---- Fixation (trial 시작 1회만 — 단어 사이에는 fixation 없음) ----
@@ -159,9 +165,9 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
         stimulus: `
           <div class="math-stim">
             ${m.problem} = ${m.displayed}
-            <div class="math-keys">F = 거짓 &nbsp;·&nbsp; J = 참</div>
+            <div class="math-keys">1 = 참 &nbsp;·&nbsp; 0 = 거짓</div>
           </div>`,
-        choices: ['f', 'j'],
+        choices: ['1', '0'],
         trial_duration: CONFIG.FILLER_MS,
         response_ends_trial: false,    // 고정 1500 ms
         data: {
@@ -171,8 +177,9 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
           is_practice: !!isPractice
         },
         on_finish: function(d) {
-          const responded = (d.response === 'j' || d.response === 'f');
-          const respondedTrue = (d.response === 'j');
+          const respondedTrue  = (d.response === '1');
+          const respondedFalse = (d.response === '0');
+          const responded = respondedTrue || respondedFalse;
           d.response_text = d.response || null;
           d.accurate = responded ? (respondedTrue === d.is_true) : false;
           d.no_response = !responded;
@@ -225,6 +232,12 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
       is_practice: !!isPractice
     },
     on_load: function() {
+      // Defensive: if any stale timer is still alive from a previous recall
+      // trial (e.g. due to a navigation glitch), clear it before starting.
+      if (recallTimerHandle) {
+        clearInterval(recallTimerHandle);
+        recallTimerHandle = null;
+      }
       const el = document.getElementById('recall-timer');
       let left = CONFIG.RECALL_MS / 1000;
       const paint = () => {
@@ -233,11 +246,12 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
         el.style.color = left <= 10 ? '#c0392b' : '#888';
       };
       paint();
-      const t = setInterval(() => {
+      recallTimerHandle = setInterval(() => {
         left -= 1;
         paint();
         if (left <= 0) {
-          clearInterval(t);
+          clearInterval(recallTimerHandle);
+          recallTimerHandle = null;
           const form = document.querySelector('#jspsych-survey-text-form');
           if (form) {
             if (typeof form.requestSubmit === 'function') form.requestSubmit();
@@ -247,6 +261,13 @@ function buildTrial(blockTag, trialIdx, condition, isPractice) {
       }, 1000);
     },
     on_finish: function(d) {
+      // Stop the countdown the moment this trial ends — otherwise the
+      // interval keeps decrementing and can force-submit a later trial's
+      // form when its internal `left` finally hits zero.
+      if (recallTimerHandle) {
+        clearInterval(recallTimerHandle);
+        recallTimerHandle = null;
+      }
       // jsPsych 의 d.rt 는 '회상 화면이 뜬 순간 → 제출 버튼/시간초과'까지의 ms.
       // 두 블록(math/nomath) 모두 동일 SurveyText 컴포넌트를 쓰므로 RT 가 동일하게 잡힌다.
       d.recall_rt = d.rt;
@@ -315,8 +336,8 @@ function buildBlock(blockTag, blockIdx) {
         <p>각 시행에서 단어 8개를 차례로 보게 되며, 모든 단어가 끝난 후 단어를
            순서대로 회상해 입력합니다.</p>
         ${isMath ? `
-        <p>화면에 식과 답이 함께 표시됩니다. 식이 <b>참</b>이면 <b>J</b> 키를,
-           <b>거짓</b>이면 <b>F</b> 키를 눌러 주세요.<br>
+        <p>화면에 식과 답이 함께 표시됩니다. 식이 <b>참</b>이면 <b>1</b> 키를,
+           <b>거짓</b>이면 <b>0</b> 키를 눌러 주세요.<br>
            응답 여부와 관계없이 1.5초 후 자동으로 다음 단어로 넘어갑니다.</p>` : ''}
         <p>이번 블록은 총 <b>${totalTrials} 시행</b>입니다.</p>
         <p>준비되면 '다음'을 눌러 주세요.</p>
@@ -335,7 +356,7 @@ function buildBlock(blockTag, blockIdx) {
            <b>제시 순서대로</b> 띄어쓰기로 구분해 입력하세요. 기억나지 않는
            위치는 <b><code>##</code></b> 으로 표기합니다.</p>
         ${isMath ? `
-        <p>수식 화면에서는 <b>J = 참 / F = 거짓</b> 키로 빠르게 응답해 주세요.
+        <p>수식 화면에서는 <b>1 = 참 / 0 = 거짓</b> 키로 빠르게 응답해 주세요.
            응답 여부와 관계없이 1.5초 후 다음 단어로 넘어갑니다.</p>` : ''}
         <p>준비되면 '연습 시작'을 눌러 주세요.</p>
       </div>`,
